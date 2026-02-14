@@ -1,0 +1,35 @@
+# editors
+*.swp
+*~
+
+# build
+/build*/
+*.backup
+
+# FOTA signing keys
+mcuboot_signing_key.pem
+*.pem
+*.key
+*.p12
+*.pfx
+*.der
+keyfile.json
+
+# Firmware binaries
+*.hex
+*.bin
+*.elf
+*.map
+
+# Environment / secrets
+.env
+.env.*
+
+# Logs
+*.log
+
+# Documentation 
+*.md
+!README.md
+# Repomix
+.repomixignore

@@ -1,0 +1,71 @@
+/*
+ * XIAO nRF54L15 + Wio-SX1262 Device Tree Overlay
+ * SX1262 LoRa transceiver configuration for point-to-point communication
+ *
+ * Hardware Connection:
+ * - SPI00: D8/P2.1 (SCK), D9/P2.4 (MISO), D10/P2.2 (MOSI)
+ * - CS: D4/P1.10 (NSS)
+ * - RESET: D2/P1.06 (NRST)
+ * - BUSY: D3/P1.07 (BUSY)
+ * - DIO1: D1/P1.05 (DIO1 interrupt)
+ * - DIO2: Internal SX1262 RF switch (automatic, high during TX)
+ * - RF_SW: D5/P1.11 (External module RF switch, high during RX)
+ * - DIO3: TCXO power supply (1.8V)
+ *
+ * Pin Conflicts Resolved:
+ * - I2C22 disabled (conflicts with CS/P1.10 and RF_SW/P1.11)
+ */
+#include <zephyr/dt-bindings/lora/sx126x.h>
+/ {
+    aliases {
+        lora0 = &lora_radio;
+    };
+    chosen {
+        zephyr,settings-partition = &storage_partition;
+    };
+};
+/* Configure NFC pins (P1.02, P1.03) as GPIO - replaces deprecated CONFIG_NFCT_PINS_AS_GPIOS */
+&uicr {
+    nfct-pins-as-gpios;
+};
+/* Disable I2C22 - pin conflicts with CS (P1.10) and RF_SW (P1.11) */
+&i2c22 {
+    status = "disabled";
+};
+/* Enable SPI00 - XIAO SPI interface on Port 2 pins */
+&spi00 {
+    compatible = "nordic,nrf-spim";
+    status = "okay";
+    /* SPI pinctrl defined in xiao_nrf54l15-pinctrl.dtsi with high drive strength */
+    pinctrl-0 = <&spi00_default>;
+    pinctrl-1 = <&spi00_sleep>;
+    pinctrl-names = "default", "sleep";
+    /* CS controlled manually via GPIO (SPIM doesn't auto-control CS) */
+    cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;  /* D4 / P1.10 - NSS */
+    lora_radio: sx1262@0 {
+        compatible = "semtech,sx1262";
+        reg = <0>;
+        status = "okay";
+        /* SPI configuration - Start at 2 MHz for reliability */
+        spi-max-frequency = <2000000>;
+        /* Required GPIO pins from Wio-SX1262 shield */
+        reset-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;     /* D2 / P1.06 - NRST */
+        busy-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;     /* D3 / P1.07 - BUSY */
+        dio1-gpios = <&gpio1 5 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; /* D1 / P1.05 - DIO1 */
+        /* RF switch control (PE4259 SPDT switch in complementary mode)
+         * DIO2 → CTRL (pin 4): SX1262 drives HIGH during TX automatically
+         * RF_SW → /CTRL (pin 6): MCU must drive HIGH during RX to enable receive path
+         *
+         * TX: DIO2=HIGH, RF_SW=LOW  → RFC routes to TX path
+         * RX: DIO2=LOW,  RF_SW=HIGH → RFC routes to RX path
+         */
+        dio2-tx-enable;
+        rx-enable-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;  /* D5 / P1.11 - RF_SW */
+        /* TCXO configuration for Wio-SX1262
+         * Module has built-in 1.8V TCXO controlled via DIO3
+         * 5ms startup delay for TCXO stabilization
+         */
+        dio3-tcxo-voltage = <SX126X_DIO3_TCXO_1V8>;
+        tcxo-power-startup-delay-ms = <5>;
+    };
+};
